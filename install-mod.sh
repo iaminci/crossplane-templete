@@ -162,13 +162,92 @@ install_crossplane() {
     print_success "Crossplane installed successfully"
 }
 
+# Function to install k3d component
+install_k3d_component() {
+    print_status "Starting k3d setup process..."
+    install_k3d
+    configure_k3d
+    create_cluster
+    print_success "k3d setup completed successfully"
+}
+
+# Function to install crossplane component
+install_crossplane_component() {
+    print_status "Starting crossplane installation..."
+    add_helm_repo
+    install_crossplane
+    print_success "Crossplane installation completed successfully"
+}
+
 # Main execution
-print_status "Starting k3d setup process..."
-install_k3d
-configure_k3d
-create_cluster
-print_success "k3d setup completed successfully"
-print_status "Adding crossplane..."
-add_helm_repo
-install_crossplane
-print_success "Crossplane installation completed successfully"
+attempts=0
+max_attempts=3
+
+while true; do
+    echo "Available components:"
+    echo "1) k3d"
+    echo "2) crossplane"
+    echo "3) all"
+
+    read -p "Enter the number of the component to install (1/2/3): " choice
+
+    # Validate input
+    if [[ ! "$choice" =~ ^[1-3]$ ]]; then
+        ((attempts++))
+        remaining=$((max_attempts - attempts))
+        if [ $remaining -eq 0 ]; then
+            print_error "Maximum attempts reached. Exiting script."
+            exit 1
+        fi
+        print_error "Invalid choice. Please select 1, 2, or 3. ($remaining attempts remaining)"
+        continue
+    fi
+
+    # Show what will be installed based on choice
+    echo -e "\nYou have selected to install:"
+    case $choice in
+        1) echo "- k3d" ;;
+        2) echo "- Crossplane" ;;
+        3) echo "- ALL components (k3d and Crossplane)" ;;
+    esac
+
+    # Confirm before proceeding
+    echo
+    confirm_attempts=0
+    max_confirm_attempts=3
+    
+    while true; do
+        read -p "$(echo -e "${YELLOW}Are you sure you want to proceed with installation? (Y/n): ${NC}")" confirm
+        
+        if [[ "$confirm" =~ ^[YyNn]$ ]]; then
+            if [[ "$confirm" =~ ^[Nn]$ ]]; then
+                print_warning "Installation cancelled"
+                exit 0
+            fi
+            break
+        else
+            ((confirm_attempts++))
+            remaining=$((max_confirm_attempts - confirm_attempts))
+            if [ $remaining -eq 0 ]; then
+                print_error "Maximum confirmation attempts reached. Exiting script."
+                exit 1
+            fi
+            echo -e "${RED}ERROR: ${NC}Invalid input. Please enter 'y' or 'n'. ($remaining attempts remaining)"
+            continue
+        fi
+    done
+    break
+done
+
+case $choice in
+    1)
+        install_k3d_component
+        ;;
+    2)
+        install_crossplane_component
+        ;;
+    3)
+        install_k3d_component
+        install_crossplane_component
+        ;;
+esac

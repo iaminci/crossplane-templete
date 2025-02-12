@@ -213,68 +213,6 @@ spec:
   package: xpkg.upbound.io/upbound/provider-gcp-storage:v1
 EOF
         print_success "Provider installed successfully"
-        echo ""
-
-        # Create GCP credentials secret
-        print_status "Creating GCP credentials secret..."
-        if kubectl get secret gcp-secret -n crossplane-system &>/dev/null; then
-            print_status "GCP credentials secret already exists"
-            if get_yes_no "Press Enter to use existing secret or type 'n' to create new credentials: "; then
-                print_success "Using existing GCP credentials secret"
-                echo ""
-            else
-                # Delete existing secret and create new one
-                kubectl delete secret gcp-secret -n crossplane-system
-                read -p "Enter the path to your GCP service account key JSON file: " gcp_creds_path
-                
-                # Validate the file exists
-                if [ ! -f "$gcp_creds_path" ]; then
-                    print_error "GCP credentials file not found at specified path"
-                fi
-                
-                # Create Kubernetes secret from credentials
-                kubectl create secret generic gcp-secret \
-                -n crossplane-system \
-                --from-file=creds="$gcp_creds_path"
-                print_success "GCP credentials secret created in Kubernetes"
-                echo ""
-            fi
-        else
-            read -p "Enter the path to your GCP service account key JSON file: " gcp_creds_path
-            
-            # Validate the file exists
-            if [ ! -f "$gcp_creds_path" ]; then
-                print_error "GCP credentials file not found at specified path"
-            fi
-            
-            # Create Kubernetes secret from credentials
-            kubectl create secret generic gcp-secret \
-            -n crossplane-system \
-            --from-file=creds="$gcp_creds_path"
-            print_success "GCP credentials secret created in Kubernetes"
-            echo ""
-        fi
-
-        # Create GCP ProviderConfig
-        print_status "Creating GCP ProviderConfig..."
-        sleep 10
-
-        cat <<EOF | kubectl apply -f -
-apiVersion: gcp.upbound.io/v1beta1
-kind: ProviderConfig
-metadata:
-  name: default
-spec:
-  credentials:
-    source: Secret
-    secretRef:
-      namespace: crossplane-system
-      name: gcp-secret
-      key: creds
-  projectID: $(jq -r '.project_id' "$gcp_creds_path")
-EOF
-        print_success "GCP ProviderConfig created successfully"
-        echo ""
         ;;
     *)
         print_error "Invalid choice. Please select 1, 2, or 3."
