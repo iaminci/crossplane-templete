@@ -151,22 +151,96 @@ cleanup_kubeconfig() {
     fi
 }
 
+# Function to uninstall k3d component
+uninstall_k3d_component() {
+    print_status "Starting k3d uninstallation..."
+    delete_clusters
+    remove_k3d
+    cleanup_directories
+    cleanup_kubeconfig
+    print_success "k3d uninstallation completed"
+}
+
+# Function to uninstall crossplane component
+uninstall_crossplane_component() {
+    print_status "Starting crossplane uninstallation..."
+    uninstall_crossplane
+    print_success "Crossplane uninstallation completed"
+}
+
 # Main execution
-print_status "Starting uninstallation process..."
+attempts=0
+max_attempts=3
 
-# Confirm before proceeding
-read -p "$(echo -e "${YELLOW}This will remove Crossplane and the crossplane k3d cluster. Continue? (Y/n): ${NC}")" confirm
-if [[ "$confirm" =~ ^[nN]$ ]]; then
-    print_warning "Uninstallation cancelled"
-    exit 0
-fi
+while true; do
+    echo "Available components to uninstall:"
+    echo "1) k3d (includes cluster, binary, directories, and kubectl config)"
+    echo "2) crossplane"
+    echo "3) all"
 
-# Execute uninstallation steps
-uninstall_crossplane
-delete_clusters
-remove_k3d
-cleanup_directories
-cleanup_kubeconfig
+    read -p "Enter the number of the component to uninstall (1/2/3): " choice
 
-print_success "Uninstallation completed successfully"
-print_warning "Note: A backup of your kubectl config has been created if it was modified"
+    # Validate input
+    if [[ ! "$choice" =~ ^[1-3]$ ]]; then
+        ((attempts++))
+        remaining=$((max_attempts - attempts))
+        if [ $remaining -eq 0 ]; then
+            print_error "Maximum attempts reached. Exiting script."
+            exit 1
+        fi
+        print_error "Invalid choice. Please select 1, 2, or 3. ($remaining attempts remaining)"
+        continue
+    fi
+
+    # Show what will be uninstalled based on choice
+    echo -e "\nYou have selected to uninstall:"
+    case $choice in
+        1) echo "- k3d (cluster, binary, directories, and kubectl config)" ;;
+        2) echo "- Crossplane" ;;
+        3) echo "- ALL components (k3d and Crossplane)" ;;
+    esac
+
+    # Confirm before proceeding
+    echo
+    confirm_attempts=0
+    max_confirm_attempts=3
+    
+    while true; do
+        read -p "$(echo -e "${YELLOW}Are you sure you want to proceed with uninstallation? (Y/n): ${NC}")" confirm
+        
+        if [[ "$confirm" =~ ^[yYnN]$ ]]; then
+            if [[ "$confirm" =~ ^[nN]$ ]]; then
+                print_warning "Uninstallation cancelled"
+                exit 0
+            fi
+            break
+        else
+            ((confirm_attempts++))
+            remaining=$((max_confirm_attempts - confirm_attempts))
+            if [ $remaining -eq 0 ]; then
+                print_error "Maximum confirmation attempts reached. Exiting script."
+                exit 1
+            fi
+            print_error "Invalid input. Please enter 'y' or 'n'. ($remaining attempts remaining)"
+        fi
+    done
+    break
+done
+
+case $choice in
+    1)
+        uninstall_k3d_component
+        print_success "Uninstallation completed successfully"
+        print_warning "Note: A backup of your kubectl config has been created if it was modified"
+        ;;
+    2)
+        uninstall_crossplane_component
+        print_success "Uninstallation completed successfully"
+        ;;
+    3)
+        uninstall_crossplane_component
+        uninstall_k3d_component
+        print_success "Uninstallation completed successfully"
+        print_warning "Note: A backup of your kubectl config has been created if it was modified"
+        ;;
+esac
